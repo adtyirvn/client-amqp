@@ -9,7 +9,7 @@ load_dotenv()
 # Access environment variables
 rabbitmq_server = os.getenv('RABBITMQ_SERVER')
 
-queue_name = 'ecg:esp32'
+queue_name = os.getenv('QUEUE_NAME')
 
 async def main():
     receiver = amqp_controller.AMQPReceiver(rabbitmq_server, queue_name)
