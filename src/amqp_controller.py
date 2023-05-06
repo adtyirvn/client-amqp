@@ -1,4 +1,3 @@
-import asyncio
 import aio_pika
 
 class AMQPReceiver:
@@ -23,7 +22,7 @@ class AMQPReceiver:
         # Create a durable queue
         queue = await channel.declare_queue(
             self.queue_name,
-            durable=True
+            durable=False
         )
 
         return queue
