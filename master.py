@@ -13,6 +13,14 @@ queue_name = os.getenv('QUEUE_NAME')
 
 receiver = amqp_controller.AMQPReceiver(rabbitmq_server, queue_name)
 async def main():
-    await receiver.start()
+            try: 
+                await receiver.start()
+            except Exception as e:
+                await receiver.close()
+                print(e)
+                
 
-asyncio.run(main())
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("Exit")
