@@ -11,8 +11,8 @@ rabbitmq_server = os.getenv('RABBITMQ_SERVER')
 
 queue_name = os.getenv('QUEUE_NAME')
 
+receiver = amqp_controller.AMQPReceiver(rabbitmq_server, queue_name)
 async def main():
-    receiver = amqp_controller.AMQPReceiver(rabbitmq_server, queue_name)
     await receiver.start()
 
 asyncio.run(main())

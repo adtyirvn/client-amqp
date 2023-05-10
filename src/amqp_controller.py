@@ -4,13 +4,20 @@ class AMQPReceiver:
     def __init__(self, host, queue_name):
         self.host = host
         self.queue_name = queue_name
+        self.connection = None
+        self.channel = None
+        self.consumer = None
 
     async def start(self):
         # Create a connection and channel, and declare a durable queue
         queue = await self.create_queue()
-        while True:
-        # Consume messages from the queue
-            await self.consume_messages(queue)
+
+        # Create a consumer to consume messages from the queue
+        self.consumer = queue.iterator()
+
+        # Start consuming messages
+        async for message in self.consumer:
+            await self.on_message(message)
 
     async def create_queue(self):
         # Establish a connection to the RabbitMQ server
@@ -26,12 +33,6 @@ class AMQPReceiver:
         )
 
         return queue
-            
-    async def consume_messages(self, queue):
-        # Define a callback function to handle received messages
-        async def on_message(message: aio_pika.IncomingMessage):
-            async with message.process():
-                print("Received message:", message.body.decode())
-
-        # Register the callback function to consume messages from the queue
-        await queue.consume(on_message)
+    async def on_message(self, message: aio_pika.IncomingMessage):
+        async with message.process():
+            print("Received message:", message.body.decode('utf-8'))
