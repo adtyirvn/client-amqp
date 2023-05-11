@@ -17,6 +17,7 @@ async def main():
                 await receiver.start()
             except Exception as e:
                 await receiver.close()
+                print("Keyboard interrupt detected")
                 print(e)
                 
 
