@@ -1,5 +1,13 @@
 import aio_pika
-import asyncio
+from . import ascon
+from . import config
+import json
+
+asc = ascon.Ascon()
+key_g = config.ENCRYPT_KEY
+nonce_g = config.ENCRYPT_NONCE
+
+
 class AMQPReceiver:
     def __init__(self, host, queue_name):
         self.host = host
@@ -10,47 +18,53 @@ class AMQPReceiver:
 
     async def start(self):
         try:
-            # Create a connection and channel, and declare a durable queue
             queue = await self.create_queue()
 
-            # Create a consumer to consume messages from the queue
-            self.consumer = queue.iterator()
+            async with queue.iterator() as queue_iter:
+                async for message in queue_iter:
+                    try:
+                        await self.on_message(message)
+                    except Exception as e:
+                        print("Error processing message:", e)
 
-            # Start consuming messages
-            async for message in self.consumer:
-                await self.on_message(message)
         except Exception as e:
-            raise Exception('Close connection')
+            print("Error starting AMQP receiver:", e)
+
+        finally:
+            await self.close_amqp()
 
     async def create_queue(self):
         try:
-            # Establish a connection to the RabbitMQ server
-            self.connection = await aio_pika.connect_robust(self.host)
-
-            # Create a channel
-            self.channel = await self.connection.channel()
-
-            # Create a durable queue
-            queue = await self.channel.declare_queue(
-                self.queue_name,
-                durable=False
-            )
-
+            connection = await aio_pika.connect_robust(self.host)
+            channel = await connection.channel()
+            queue = await channel.declare_queue(self.queue_name, durable=False)
             return queue
-        except Exception as e:
-            await self.close()
-            pass
 
-    async def close(self):
-        try:
-            await self.connection.close()
         except Exception as e:
-            pass
+            raise RuntimeError(e)
 
     async def on_message(self, message: aio_pika.IncomingMessage):
         try:
             async with message.process():
-                print("Received message:", message.body.decode('utf-8'))
-        except asyncio.CancelledError:
-            pass
+                global nonce_g
+
+                def decryption(ascon, ciphertext, key, nonce, mode="ECB"):
+                    plaintext = ascon.ascon_decrypt(
+                        key, nonce, associateddata=b"", ciphertext=ciphertext, variant="Ascon-128"
+                    )
+                    if mode == "CBC":
+                        new_nonce = ciphertext[:16]
+                        return plaintext, new_nonce
+
+                plaintext, nonce_g = decryption(asc, message.body, key_g, nonce_g, "CBC")
+                # print(plaintext)
+                message_json = plaintext.decode("utf-8")
+                message_dict = json.loads(message_json)
+                print(f"*** Received message ***\n{message.body}\n{message_dict}\n")
+
+        except Exception as e:
+            raise RuntimeError(e)
         
+    async def close_amqp(self):
+        if self.connection is not None:
+            await self.connection.close()
