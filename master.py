@@ -14,8 +14,9 @@ async def main():
     receiver = amqp_controller.AMQPReceiver(rabbitmq_server, queue_name)
     try:
         await receiver.start()
-    except KeyboardInterrupt:
-        print("Keyboard interrupt received. Stopping message consumption.")
-        receiver.close_amqp()
-
-asyncio.run(main())
+    except Exception as e:
+        print(e)
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    print("Keyboard Interrupt\nClosing...")

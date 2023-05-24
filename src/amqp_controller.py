@@ -1,3 +1,4 @@
+import asyncio
 import aio_pika
 from . import ascon
 from . import config
@@ -16,32 +17,24 @@ class AMQPReceiver:
         self.channel = None
         self.consumer = None
 
+    async def connect(self):
+            self.connection = await aio_pika.connect_robust(self.host, heartbeat=30)
+            self.channel = await self.connection.channel()
+            queue = await self.channel.declare_queue(self.queue_name, durable=False)
+            self.consumer = queue.iterator()
+
     async def start(self):
         try:
-            queue = await self.create_queue()
+            await self.connect()
 
-            async with queue.iterator() as queue_iter:
-                async for message in queue_iter:
-                    try:
-                        await self.on_message(message)
-                    except Exception as e:
-                        print("Error processing message:", e)
-
+            async for message in self.consumer:
+                try:
+                    await self.on_message(message)
+                except Exception as e:
+                    print(f"Error processing message: {e}\n")
+        
         except Exception as e:
-            print("Error starting AMQP receiver:", e)
-
-        finally:
-            await self.close_amqp()
-
-    async def create_queue(self):
-        try:
-            connection = await aio_pika.connect_robust(self.host)
-            channel = await connection.channel()
-            queue = await channel.declare_queue(self.queue_name, durable=False)
-            return queue
-
-        except Exception as e:
-            raise RuntimeError(e)
+            raise Exception(f"Error start received message: {e}\n")
 
     async def on_message(self, message: aio_pika.IncomingMessage):
         try:
@@ -57,14 +50,9 @@ class AMQPReceiver:
                         return plaintext, new_nonce
 
                 plaintext, nonce_g = decryption(asc, message.body, key_g, nonce_g, "CBC")
-                # print(plaintext)
                 message_json = plaintext.decode("utf-8")
                 message_dict = json.loads(message_json)
                 print(f"*** Received message ***\n{message.body}\n{message_dict}\n")
 
         except Exception as e:
             raise RuntimeError(e)
-        
-    async def close_amqp(self):
-        if self.connection is not None:
-            await self.connection.close()
