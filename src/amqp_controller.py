@@ -2,11 +2,22 @@ import aio_pika
 from . import ascon
 from . import config
 import json
+from datetime import datetime
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
+import pytz
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 asc = ascon.Ascon()
 key_g = config.ENCRYPT_KEY
 nonce_g = config.ENCRYPT_NONCE
-
+bucket_g = os.getenv('BUCKET_NAME')
+org_g = os.getenv('BUCKET_ORG')
+token_g = os.getenv('BUCKET_TOKEN')
+url_g = os.getenv('INFLUXDB_SERVER')
 
 class AMQPReceiver:
     def __init__(self, host, queue_name):
@@ -49,12 +60,27 @@ class AMQPReceiver:
                 if mode == "CBC":
                     new_nonce = ciphertext[:16]
                     return plaintext, new_nonce
+                
+            def write_data_to_influxdb(data, bucket, org, token, url):
+                client = InfluxDBClient(url=url, token=token, org=org)
+                write_api = client.write_api(write_options=SYNCHRONOUS)
+                timestamp = datetime(*data["tsp"][:3],*data["tsp"][4:7], microsecond=data["tsp"][7], tzinfo=pytz.UTC)
+                iso_timestamp = timestamp.isoformat()
+                dt = datetime(*data["tsp"][:3],*data["tsp"][4:6], data["tsp"][6]-1, microsecond=data["tsp"][7])
+                rfc3339_time = dt.isoformat('T', timespec='microseconds') + 'Z'
+                point = Point("measurement")\
+                    .tag("id", data["id"])\
+                    .field("temperature", data["t"])\
+                    .field("humidity", data["h"])\
+                    .time(rfc3339_time)
+                write_api.write(bucket=bucket, org=org, record=point)
 
             plaintext, nonce_g = decryption(asc, message.body, key_g, nonce_g, "CBC")
             message_json = plaintext.decode("utf-8")
             message_dict = json.loads(message_json)
             print(f"*** Received message ***\n{message.body}\n{message_dict}\n")
-
+            write_data_to_influxdb(data=message_dict, bucket=bucket_g, org=org_g, token=token_g, url=url_g)
+   
     async def close_amqp(self):
         try:
             if self.connection is not None:
