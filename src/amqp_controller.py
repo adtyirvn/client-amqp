@@ -70,8 +70,8 @@ class AMQPReceiver:
                 rfc3339_time = dt.isoformat('T', timespec='microseconds') + 'Z'
                 point = Point("measurement")\
                     .tag("id", data["id"])\
-                    .field("temperature", data["t"])\
-                    .field("humidity", data["h"])\
+                    .field("raw_data", data["rd"])\
+                    .field("voltage", data["v"])\
                     .time(rfc3339_time)
                 write_api.write(bucket=bucket, org=org, record=point)
 
