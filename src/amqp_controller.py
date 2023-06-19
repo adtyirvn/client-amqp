@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
-import pytz
+# import pytz
 from dotenv import load_dotenv
 import os
 
@@ -53,8 +53,8 @@ class AMQPReceiver:
         async with message.process():
             global nonce_g
 
-            def decryption(ascon, ciphertext, key, nonce, mode="ECB"):
-                plaintext = ascon.ascon_decrypt(
+            def decryption(ciphertext, key, nonce, mode="ECB"):
+                plaintext = asc.ascon_decrypt(
                     key, nonce, associateddata=b"", ciphertext=ciphertext, variant="Ascon-128"
                 )
                 if mode == "CBC":
@@ -64,8 +64,8 @@ class AMQPReceiver:
             def write_data_to_influxdb(data, bucket, org, token, url):
                 client = InfluxDBClient(url=url, token=token, org=org)
                 write_api = client.write_api(write_options=SYNCHRONOUS)
-                timestamp = datetime(*data["tsp"][:3],*data["tsp"][4:7], microsecond=data["tsp"][7], tzinfo=pytz.UTC)
-                iso_timestamp = timestamp.isoformat()
+                # timestamp = datetime(*data["tsp"][:3],*data["tsp"][4:7], microsecond=data["tsp"][7], tzinfo=pytz.UTC)
+                # iso_timestamp = timestamp.isoformat()
                 dt = datetime(*data["tsp"][:3],*data["tsp"][4:6], data["tsp"][6]-1, microsecond=data["tsp"][7])
                 rfc3339_time = dt.isoformat('T', timespec='microseconds') + 'Z'
                 point = Point("measurement")\
@@ -75,7 +75,7 @@ class AMQPReceiver:
                     .time(rfc3339_time)
                 write_api.write(bucket=bucket, org=org, record=point)
 
-            plaintext, nonce_g = decryption(asc, message.body, key_g, nonce_g, "CBC")
+            plaintext, nonce_g = decryption(message.body, key_g, nonce_g, "CBC")
             message_json = plaintext.decode("utf-8")
             message_dict = json.loads(message_json)
             print(f"*** Received message ***\n{message.body}\n{message_dict}\n")
@@ -84,6 +84,7 @@ class AMQPReceiver:
     async def close_amqp(self):
         try:
             if self.connection is not None:
+                await self.channel.close()
                 await self.connection.close()
         except Exception as e:
             print("Error closing AMQP connection:", e)
