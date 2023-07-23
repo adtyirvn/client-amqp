@@ -68,6 +68,15 @@ class AMQPReceiver:
                 # iso_timestamp = timestamp.isoformat()
                 dt = datetime(*data["tsp"][:3],*data["tsp"][4:6], data["tsp"][6]-1, microsecond=data["tsp"][7])
                 rfc3339_time = dt.isoformat('T', timespec='microseconds') + 'Z'
+                # Get the current datetime with microseconds
+                current_datetime = datetime.utcnow()
+                print(current_datetime)
+                # Calculate the time difference
+                time_difference = current_datetime - dt
+                # Convert the time difference to milliseconds
+                time_difference_in_ms = time_difference.total_seconds() * 1000
+                print(f'Time difference in milliseconds:  {time_difference_in_ms} ms')
+                print(f'Time difference in seconds: {time_difference_in_ms/1000} s\n')
                 point = Point("measurement")\
                     .tag("id", data["id"])\
                     .field("raw_data", data["rd"])\
